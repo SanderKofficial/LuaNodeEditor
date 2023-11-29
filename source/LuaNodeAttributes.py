@@ -2,6 +2,7 @@ import dearpygui.dearpygui as dpg
 import globals
 from globals import ind, inc_ind, dec_ind, Serializable
 from abc import ABC, abstractmethod
+from pprint import pprint
 
 
 class NodeAttribute(Serializable):
@@ -137,6 +138,7 @@ class NodeAttributeMultipleTableEntry(NodeAttribute):
                 pass
 
     def add_argument(self, name=None, value=None):
+        print(name, value)
         entry_name_hint = f"name{len(self.entries) + 1}" if name is None else name
         entry_value_hint = f"value{len(self.entries) + 1}" if value is None else value
         # new_arg: NodeAttributeExpressionOut = NodeAttributeExpressionOut(arg_name, simple=True)
@@ -176,8 +178,7 @@ class NodeAttributeMultipleTableEntry(NodeAttribute):
 
     def deserialize(self, obj):
         for arg in obj["entries"]:
-            # self.add_argument(arg["value"])
-            self.add_argument(arg["name"], arg["value"])
+            self.add_argument(arg["name"]["value"], arg["value"]["value"])
 
 
 class NodeAttributeTableEntry(NodeAttribute):
@@ -218,6 +219,8 @@ class NodeAttributeExpressionOut(NodeAttribute):
                     self.value = dpg.add_input_text(hint=hint, width=150)
                     if value:
                         dpg.set_value(self.value, value)
+                else:
+                    dpg.add_text(hint)
 
     def generate_code(self):
         # if not simple, we let the parent node decide what the code is for this

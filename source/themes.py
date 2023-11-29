@@ -21,14 +21,14 @@ def create_theme_from_color(color):
     return ret
 
 def init_themes():
-    pink_theme = create_theme_from_color((155, 0, 155))
-    green_theme = create_theme_from_color((40, 240, 10))
-    blue_theme = create_theme_from_color((10, 20, 250))
-    red_theme = create_theme_from_color((240, 10, 30))
-    purple_theme = create_theme_from_color((240, 10, 230))
-    yellow_theme = create_theme_from_color((220, 250, 10))
-    brown_theme = create_theme_from_color((165, 42, 42))
-    white_theme = create_theme_from_color((220, 220, 220))
+    pink_theme = create_theme_from_color((105, 0, 105))
+    green_theme = create_theme_from_color((20, 150, 10))
+    blue_theme = create_theme_from_color((10, 20, 200))
+    red_theme = create_theme_from_color((190, 10, 30))
+    purple_theme = create_theme_from_color((190, 10, 180))
+    yellow_theme = create_theme_from_color((140, 180, 10))
+    brown_theme = create_theme_from_color((115, 42, 42))
+    white_theme = create_theme_from_color((170, 170, 170))
 
     global themes
     themes[(lua_ntStart, )] = pink_theme

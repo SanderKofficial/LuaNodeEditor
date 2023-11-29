@@ -1,6 +1,9 @@
+# pyinstaller --onefile --name LuaNodeEditor --icon="Small Logo.ico" --noconsole main.py
 import os
 
 import dearpygui.dearpygui as dpg
+from pprint import pprint
+import threading
 
 import themes
 from LuaNodes import *
@@ -9,14 +12,23 @@ import json
 
 dpg.create_context()
 dpg.configure_app(manual_callback_management=True)
-dpg.create_viewport(title='Lua Node Editor', width=1200, height=800)
+dpg.configure_app(init_file="dpg.ini")
+dpg.create_viewport(title='Lua Node Editor', width=1200, height=800, small_icon="Small Logo.ico", large_icon="Small Logo.ico")
 
+def save_init():
+    dpg.save_init_file("dpg.ini")
+
+def call_threaded(function, args):
+    my_thread = threading.Thread(target=function, args=args)
+    my_thread.start()
 
 # callback runs when user attempts to connect attributes
 def link_callback(sender, app_data):
     # check for no other link to have the same end
     for l in globals.links:
         if l.to_attribute == app_data[1]:
+            call_threaded(add_log, ("Can't have multiple inputs", ))
+            # add_log("Can't have multiple inputs")
             return
 
     id = dpg.add_node_link(app_data[0], app_data[1], parent=sender)
@@ -58,17 +70,81 @@ def get_starting_node():
     return None
 
 
+def add_log(log_message):
+    with dpg.stage() as stage:
+        text_added = dpg.add_text(log_message, tracked=True, track_offset=1)
+
+    dpg.push_container_stack("log_container")
+    dpg.unstage(stage)
+    dpg.pop_container_stack()
+    dpg.delete_item(stage)
+
+    dpg.split_frame(delay=1)
+    dpg.configure_item(text_added,  tracked=False)
+
 def show_modal(window_title, modal_message, ok_callback=None, show_cancel=False, cancel_callback=None):
+    dpg.delete_item("modal")
+    # with dpg.stage() as modal_stage:
+        # modal window
+    with dpg.window(modal=True, no_move=False, show=True,
+                    pos=[9999, 9999],
+                    no_resize=True, tag="modal", min_size=[0, 0]):
+        dpg.add_text("", tag="modal_text")
+        dpg.add_spacer()
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="Ok", callback=default_modal_callback, tag="modal_ok")
+            dpg.add_button(label="Cancel", show=False, tag="modal_cancel")
+
     dpg.configure_item("modal", label=window_title)
     dpg.configure_item("modal_text", default_value=modal_message)
-    dpg.configure_item("modal", show=True)
-    dpg.configure_item("modal", pos=[dpg.get_viewport_width() // 2 - 150, dpg.get_viewport_height() // 2 - 100])
 
     dpg.configure_item("modal_cancel", show=show_cancel)
     dpg.configure_item("modal_ok", callback=default_modal_callback if ok_callback is None else ok_callback)
+
     if show_cancel:
         dpg.configure_item("modal_cancel", callback=cancel_callback)
 
+    def test():
+        dpg.split_frame(delay=1)
+
+        w = dpg.get_item_width("modal")
+        h = dpg.get_item_height("modal")
+        print(w, h)
+        dpg.configure_item("modal", pos=[dpg.get_viewport_width() // 2 - w/2, dpg.get_viewport_height() // 2 - h/2])
+
+    call_threaded(test, ())
+    # dpg.delete_item(modal_stage)
+
+
+def show_help_modal():
+    help_text = '''
+Interface Navigation:
+1. Panning the View:
+Middle Mouse Button: Hold down the middle mouse button and move the mouse to pan the view across the editor canvas.
+2. Selecting Nodes and Links:
+Click and Drag: Select multiple nodes and links by clicking and dragging a selection box around them.
+Clear Selection: Click outside of the selected area to clear the current selection.
+3. Connecting Nodes:
+Drag to Connect: To establish connections between nodes, click on a pin of one node and drag to the pin of another. Release the mouse button to create a connection.
+4. Disconnecting Nodes:
+Control + Drag: To disconnect a pin, hold down the Control key and drag the pin away from its connected node.
+5. Node Creation:
+Right-Click: Open the context menu by right-clicking on the editor window. Select 'Create New Node' to add a new node to your workflow.
+
+File Management:
+1. Creating a New File:
+Shortcut: Press File + New to create a new file.
+2. Saving Your Work:
+Shortcut: Press File + Save As to save your current work. Specify a file name and location.
+3. Loading a Previous File:
+Shortcut: Press File + Load to open a previously saved file.
+
+Code Generation:
+1. Generating Code:
+Click 'Generate Code': Once you've designed your node network, click the 'Generate Code' button to automatically generate the corresponding code.
+    '''
+    show_modal("Help", help_text)
+    pass
 
 def generate_code():
     code = ""
@@ -88,6 +164,7 @@ def generate_code():
     start_node = get_starting_node()
     if start_node is None:
         show_modal("Warning", "Start node not found! Please add one.")
+        call_threaded(add_log, ("Please add a starting node for proper code generation",))
     else:
         code += start_node.generate_code()
 
@@ -134,28 +211,28 @@ def key_press_callback(s, key):
     if key == dpg.mvKey_Delete:
         delete_selected_nodes()
     elif key == dpg.mvKey_T:
-        for node in globals.nodes:
-            if isinstance(node, LuaVariableNode):
-                dpg.configure_item(node.attribute_var.value, multiline=True)
-
-        pass
         print(globals.nodes)
         print(globals.links)
-        for child in dpg.get_item_children("node_search_filter", slot=1):
-            print(dpg.get_item_state(child))
+        # for child in dpg.get_item_children("node_search_filter", slot=1):
+        #     print(dpg.get_item_state(child))
+
     elif dpg.is_key_down(dpg.mvKey_Control):
         if key == dpg.mvKey_1:
             dpg.show_item_registry()
         if key == dpg.mvKey_2:
             dpg.show_style_editor()
         elif key == dpg.mvKey_S:
-            # create save folder if it doesnt exist
-            create_folder_if_not_exists("save_files")
-            dpg.show_item("save_dialog")
+            open_save_dialog()
         elif key == dpg.mvKey_L:
-            create_folder_if_not_exists("save_files")
-            dpg.show_item("load_dialog")
+            open_load_dialog()
 
+def open_save_dialog():
+    create_folder_if_not_exists("save_files")
+    dpg.show_item("save_dialog")
+
+def open_load_dialog():
+    create_folder_if_not_exists("save_files")
+    dpg.show_item("load_dialog")
 
 def create_folder_if_not_exists(folder_path):
     if not os.path.exists(folder_path):
@@ -305,6 +382,10 @@ def save_file_callback(sender, app_data):
 def file_dialog_cancel_callback(sender, app_data):
     pass
 
+with dpg.font_registry():
+    # first argument ids the path to the .ttf or .otf file
+    bold_font = dpg.add_font("robotoBold.ttf", 18, tag="bold_roboto")
+    default_font = dpg.add_font("roboto.ttf", 14, tag="roboto")
 
 # file selector
 # load
@@ -338,8 +419,12 @@ with dpg.window(tag="main_window") as main_win:
     with dpg.menu_bar():
         with dpg.menu(label="File"):
             dpg.add_menu_item(label="New", callback=lambda: menu_pressed_new_file())
-            dpg.add_menu_item(label="Save as", callback=lambda: dpg.show_item("save_dialog"))
-            dpg.add_menu_item(label="Load", callback=lambda: dpg.show_item("load_dialog"))
+            dpg.add_menu_item(label="Save as", callback=lambda: open_save_dialog())
+            dpg.add_menu_item(label="Load", callback=lambda: open_load_dialog())
+        with dpg.menu(label="Settings"):
+            dpg.add_menu_item(label="Style editor", callback=lambda: dpg.show_style_editor())
+            # dpg.add_menu_item(label="Save style", callback=lambda: save_init())
+        dpg.add_menu_item(label="Help", callback=lambda: show_help_modal())
 
     with dpg.group(horizontal=True):
         # with dpg.child_window(width=150):
@@ -364,8 +449,13 @@ with dpg.window(tag="main_window") as main_win:
                 # with dpg.child_window(tag="test_tag"):
                 dpg.add_button(label="Generate code", callback=generate_code)
                 dpg.add_button(label="Copy code", callback=lambda: pc.copy(dpg.get_value("generated_code")))
-            dpg.add_input_text(height=-1, multiline=True, tag="generated_code", width=350)
+            dpg.add_input_text(height=-200, multiline=True, tag="generated_code", width=350)
+            with dpg.tab_bar():
+                with dpg.tab(label="Log"):
+                    with dpg.child_window(height=-1, border=False, tag="log_container"):
+                        pass
 
+    dpg.bind_font(default_font)
 
 # dpg.bind_item_handler_registry("node_editor", "node_editor_handler")
 
@@ -378,16 +468,6 @@ def default_modal_callback():
     dpg.configure_item("modal", show=False)
 
 
-# modal window
-with dpg.window(label="test", modal=True, no_move=True, show=False,
-                pos=[dpg.get_viewport_width() // 2 - 150, dpg.get_viewport_height() // 2 - 100],
-                no_resize=True, tag="modal", min_size=[0, 0]) as modal:
-    dpg.add_text("", tag="modal_text")
-    dpg.add_spacer()
-    with dpg.group(horizontal=True):
-        dpg.add_button(label="Ok", callback=default_modal_callback, tag="modal_ok")
-        dpg.add_button(label="Cancel", show=False, tag="modal_cancel")
-
 # hide reference node on first frame (actually cant do it because it wont have rect_min set properly)
 # dpg.set_frame_callback(frame=1, callback=lambda: dpg.hide_item("reference_node"))
 # so i just hide it instead
@@ -396,6 +476,7 @@ dpg.bind_item_theme("reference_node", reference_node_theme)
 dpg.setup_dearpygui()
 dpg.show_viewport()
 dpg.set_primary_window(main_win, True)
+
 while dpg.is_dearpygui_running():
     jobs = dpg.get_callback_queue()  # retrieves and clears queue
     dpg.run_callbacks(jobs)

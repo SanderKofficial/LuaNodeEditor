@@ -138,6 +138,8 @@ def create_node_of_type(type):
         node = LuaNodeIteratePairs()
     elif type == lua_ntIterateIPairs:
         node = LuaNodeIterateIPairs()
+
+    dpg.bind_item_font(node.id, "bold_roboto")
     return node
 
 
@@ -180,6 +182,7 @@ class LuaNode(Serializable):
         for node_attribute in self.node_attributes:
             node_attribute.parent_node = self
             for child in dpg.get_item_children(node_attribute.stage, slot=1):
+                dpg.bind_item_font(child, "roboto")
                 dpg.move_item(child, parent=self.id)
                 # dpg.move_item(node_attribute.id, parent=self.id)
             dpg.delete_item(node_attribute.stage)
@@ -206,13 +209,9 @@ class LuaNode(Serializable):
         dpg.configure_item(self.id, pos=node_pos)
         self.node_type = obj["node_type"]
         i = 0
-        print(obj["attributes"].items())
-        print("before")
-        print(len(self.node_attributes))
         for attribute_id, attribute_data in obj["attributes"].items():
             self.node_attributes[i].deserialize(attribute_data)
             i += 1
-        print(len(self.node_attributes))
 
 
 class LuaVariableNode(LuaNode):
@@ -231,7 +230,7 @@ class LuaVariableNode(LuaNode):
         self.attribute_var = self.node_attributes[2]
 
         with dpg.stage() as self.stage:
-            with dpg.node(label="Variable", pos=dpg.get_mouse_pos()) as self.id:
+            with dpg.node(label="Variable", pos=dpg.get_mouse_pos(),) as self.id:
                 pass
 
     def has_from_node(self):
@@ -274,7 +273,6 @@ class LuaTable(LuaNode):
 
     def has_from_node(self):
         ret = globals.get_from_node_from_in_node_attribute(self.attribute_execute_in.id) is not None or globals.get_to_node_from_out_node_attribute(self.attribute_expression_output.id) is not None
-        print(ret)
         return ret
 
     def return_table_value(self, params):
@@ -285,7 +283,11 @@ class LuaTable(LuaNode):
         local_code = ""
         if self.has_from_node():
             local_code = f"local "
-        return f"{ind()}{local_code}{name_code} = {self.attribute_table_entries.generate_code()}"
+        code_without_flow_out = f"{ind()}{local_code}{name_code} = {self.attribute_table_entries.generate_code()}\n"
+        if not self.has_from_node():
+            return local_code
+        out_code = self.attribute_execute_out.generate_code()
+        return f"{code_without_flow_out}{out_code}"
 
 class LuaStartNode(LuaNode):
     def __init__(self):
@@ -704,10 +706,10 @@ class LuaNodeFunction(LuaNode):
                        i, arg in enumerate(self.attribute_params.arguments)])
 
         execute_code = ""
-        if inline:
-            inc_ind()
-            execute_code = self.attribute_execute_code.generate_code()
-            dec_ind()
+        # if inline:
+        inc_ind()
+        execute_code = self.attribute_execute_code.generate_code()
+        dec_ind()
 
         execute_out_code = self.attribute_execute_out.generate_code()
 
@@ -729,7 +731,7 @@ class LuaNodeFunctionCall(LuaNode):
             NodeAttributeExpressionIn("Call On Object"),
             NodeAttributeCheckbox("Call on self"),
             NodeAttributeMultipleExpressionIn("Arguments"),
-            NodeAttributeExpressionOut("Out")
+            NodeAttributeExpressionOut("Out", simple=False)
         ]
 
         self.attribute_execute_in = self.node_attributes[0]
@@ -755,7 +757,8 @@ class LuaNodeFunctionCall(LuaNode):
 
         end = f"\n{execute_out_code}" if execute_out_code != "" else ""
         call_on_object_code = f"{call_on_object_code}{'.' if not dpg.get_value(self.attribute_call_on_self.checkbox) else ':'}" if call_on_object_code != "" else ""
-        return f"{call_on_object_code}{ind()}{function_name}({params_code}){end}"
+        # return f"{call_on_object_code}{ind()}{function_name}({params_code}){end}"
+        return f"{call_on_object_code}{function_name}({params_code}){end}"
 
 class LuaNodeReturn(LuaNode):
     def __init__(self):
